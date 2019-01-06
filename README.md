@@ -1,1 +1,1 @@
-# Zense-Project
+This is a python-based project that simulates the working of a double pendulum. It uses matplotlib and associated libraries. It shows a set of two graphs, one simulating the pendulum in air, and the other in water. With different parameters (length, mass, gravity), the difference in path traced by the bob is clearly depicted.
