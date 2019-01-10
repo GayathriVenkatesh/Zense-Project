@@ -5,115 +5,110 @@ import scipy.integrate as integrate
 import matplotlib.animation as animation
 import time
 
-class DoublePendulum:
+class Pendulum:
 
-    def __init__(self,init_state,
+    def __init__(self,init_condition,
                     l1,l2,
                     m1, m2,
-                    g, dens,
-                    origin,water):
-
+                    g, dens,water):
         self.l1=l1
         self.l2=l2
-
         if water=='Yes':
             m1*=(1+0.5*(1/dens))
             m2*=(1+0.5*(1/dens))
             g*=(1-1/dens)
-            #const self.g
         self.m1=m1
         self.m2=m2
         self.g=g
         self.dens=dens
-        print self.g
-        self.init_state=np.asarray(init_state,dtype='float')
+        self.condition=np.asarray(init_condition,dtype='float')
         self.params=(self.l1,self.l2,self.m1,self.m2,g)
-        self.origin=origin
         self.time_elapsed=0
-        self.state=self.init_state*np.pi/180
+        self.initial_coordinate=(0.0,8.0)
+        self.condition*=np.pi/180
 
-    def position(self):
+    def find_posn(self):
         (self.l1,self.l2,self.m1,self.m2,self.g)=self.params
-        x=np.cumsum([self.origin[0],
-                    self.l1*sin(self.state[0]),
-                    self.l2*sin(self.state[2])])
+        x=np.cumsum([0,
+                    self.l1*sin(self.condition[0]),
+                    self.l2*sin(self.condition[2])])
 
-        y=np.cumsum([self.origin[1],
-                    -self.l1*cos(self.state[0]),
-                    -self.l2*cos(self.state[2])])
+        y=np.cumsum([0,
+                    -self.l1*cos(self.condition[0]),
+                    -self.l2*cos(self.condition[2])])
+
         return (x,y)
 
 
-    def energy(self):
+    def find_energy(self):
         (self.l1,self.l2,self.m1,self.m2,self.g)=self.params
         x=np.cumsum([
-                    self.l1*sin(self.state[0]),
-                    self.l2*sin(self.state[2])])
+                    self.l1*sin(self.condition[0]),
+                    self.l2*sin(self.condition[2])])
         y=np.cumsum([
-                    -self.l1*cos(self.state[0]),
-                    -self.l2*cos(self.state[2])])
-        vx=np.cumsum([self.l1*self.state[1]*cos(self.state[0]),
-                    self.l2*self.state[3]*cos(self.state[2])])
+                    -self.l1*cos(self.condition[0]),
+                    -self.l2*cos(self.condition[2])])
+        vx=np.cumsum([self.l1*self.condition[1]*cos(self.condition[0]),
+                    self.l2*self.condition[3]*cos(self.condition[2])])
 
-        vy=np.cumsum([self.l1*self.state[1]*sin(self.state[0]),
-                    self.l2*self.state[3]*sin(self.state[2])])
+        vy=np.cumsum([self.l1*self.condition[1]*sin(self.condition[0]),
+                    self.l2*self.condition[3]*sin(self.condition[2])])
 
-        u=self.g*(self.m1*y[0]+self.m2*y[1])
+        total_energy=self.g*(self.m1*self.initial_coordinate[0]+self.m2*self.initial_coordinate[1])
+
+        new=integrate.odeint(self.differentiate,self.condition,[0,dt])[1]
+        i1=self.m1*self.l1*self.l1
+        i2=self.m2*self.l2*self.l2
+        q=0.5*(i1*new[0]*new[0] + i2*new[2]*new[2])
         k=0.5*(self.m1*(vx[0]**2+vy[0]**2)+self.m2*(vx[1]**2+vy[1]**2))
+        k+=q
+        u=total_energy-k
 
         return (u,k)
 
-    def dstate_dt(self,state,t):
+    def differentiate(self,condition,t):
         (self.l1,self.l2,self.m1,self.m2,self.g)=self.params
         dxdt=np.asarray([0,0,0,0],float)
-        dxdt[0]=state[1]
-        dxdt[2]=state[3]
-        cos_delta=cos(state[0]-state[2])
-        sin_delta=sin(state[0]-state[2])
+        dxdt[0]=condition[1]
+        dxdt[2]=condition[3]
 
-        num1=-self.g*(2*self.m1+self.m2)*sin(state[0])
-        num2=-self.m2*self.g*sin(state[0]-state[2]*2)
-        num3=-2*sin_delta*self.m2
-        num4=state[3]*state[3]*self.l2+state[1]*state[1]*self.l1*cos_delta
-        den1=self.l1*(2*self.m1+self.m2-self.m2*cos(2*state[0]-2*state[2]))
+        a=-self.g*(2*self.m1+self.m2)*sin(condition[0])
+        b=-self.m2*self.g*sin(condition[0]-condition[2]*2)
+        c=-2*sin(condition[0]-condition[2])*self.m2
+        d=condition[3]*condition[3]*self.l2+condition[1]*condition[1]*self.l1*cos(condition[0]-condition[2])
+        e=self.l1*(2*self.m1+self.m2-self.m2*cos(2*condition[0]-2*condition[2]))
 
-        dxdt[1]=(num1+num2+num3*num4)/den1
-        #print self.g,dxdt[1]
-        num1=2*sin(state[0]-state[2])
-        num2=state[1]*state[1]*self.l1*(self.m1+self.m2)
-        num3=self.g*(self.m1+self.m2)*cos(state[0])
-        num4=state[3]*state[3]*self.l2*self.m2*cos_delta
-        den2=self.l2*(2*self.m1+self.m2-self.m2*cos(2*state[0]-2*state[2]))
-        dxdt[3]=(num1*(num2+num3+num4))/den2
+        dxdt[1]=(a+b+c*d)/e
+        a=2*sin(condition[0]-condition[2])
+        b=condition[1]*condition[1]*self.l1*(self.m1+self.m2)
+        c=self.g*(self.m1+self.m2)*cos(condition[0])
+        d=condition[3]*condition[3]*self.l2*self.m2*cos(condition[0]-condition[2])
+        e=self.l2*(2*self.m1+self.m2-self.m2*cos(2*condition[0]-2*condition[2]))
+        dxdt[3]=(a*(b+c+d))/e
 
         return dxdt
 
-    def step(self,dt,ax):
-        self.state=integrate.odeint(self.dstate_dt,self.state,[0,dt])[1]
+    def increment_time(self,dt,ax):
+        self.condition=integrate.odeint(self.differentiate,self.condition,[0,dt])[1]
         self.time_elapsed+=dt
         self.l1,self.l2=self.params[0],self.params[1]
         x=np.cumsum([
-                    self.l1*sin(self.state[0]),
-                    self.l2*sin(self.state[2])])
+                    self.l1*sin(self.condition[0]),
+                    self.l2*sin(self.condition[2])])
         y=np.cumsum([
-                    -self.l1*cos(self.state[0]),
-                    -self.l2*cos(self.state[2])])
+                    -self.l1*cos(self.condition[0]),
+                    -self.l2*cos(self.condition[2])])
         plt.sca(ax)
         plt.scatter(x[0],y[0],s=5,c='red')
         plt.scatter(x[1],y[1],s=5,c='pink')
 
-
-#pendulum=DoublePendulum([90.,0.0,90.,0.0],3,5,2,10,7.924,(0,0),'No')
-pendulum=DoublePendulum([90.,0.0,90.,0.0],3,5,2,10,19.8,7.86,(0,0),'Yes')
-pendulum2=DoublePendulum([90.,0.0,90.,0.0],3,5,2,10,19.8,7.86,(0,0),'No')
+p1=Pendulum([90.,0.0,90.,0.0],3,5,1,5,19.8,7.86,'Yes')     #CHANGE THESE VALUES TO SEE VARIATION IN BEHAVIOUR OF PENDULUM
+p2=Pendulum([90.,0.0,90.,0.0],3,5,1,5,19.8,7.86,'No')
 dt=1./25
 
 fig=plt.figure(figsize=(80,80),facecolor= u'#191970')
 ax=fig.add_subplot(2,2,2,aspect='equal',autoscale_on=False,xlim=(-10,10),ylim=(-10,10))
-
 img=plt.imread("water2.jpg")
-#plt.xlabel('x',color='w')
-# plt.ylabel('y')
 ax.imshow(img,extent=[-10,10,-10,25])
 ax.grid()
 plt.rc_context({'axes.edgecolor':'orange', 'xtick.color':'w', 'ytick.color':'w'})
@@ -126,49 +121,42 @@ plt.rc_context({'axes.edgecolor':'orange', 'xtick.color':'w', 'ytick.color':'w'}
 ax2.set_facecolor('black')
 line2, = ax2.plot([],'bo-',markersize='15',lw=2)
 plt.sca(ax2)
-#plt.xlabel('x1',color='w')
 plt.rc_context({'axes.edgecolor':'orange', 'xtick.color':'w', 'ytick.color':'w'})
 ax.tick_params(axis='x', colors='w')
 ax.tick_params(axis='y', colors='w')
 
-time_text=ax.text(0.02,0.95,'',transform=ax.transAxes,bbox=dict(facecolor='w', alpha=0.5),fontsize='12')
-time_text2=ax2.text(0.02,0.95,'',transform=ax.transAxes,bbox=dict(facecolor='w', alpha=0.5),fontsize='12')
-l1_text=ax.text(0.02,0.95,'',transform=ax.transAxes,bbox=dict(facecolor='w', alpha=0.5),fontsize='6')
-l2_text=ax2.text(0.02,0.95,'',transform=ax.transAxes,bbox=dict(facecolor='w', alpha=0.5),fontsize='6')
-m1_text=ax.text(0.02,0.95,'',transform=ax.transAxes)
-m2_text=ax2.text(0.02,0.95,'',transform=ax.transAxes)
-energy_text=ax.text(0.02,0.85,'',transform=ax.transAxes,bbox=dict(facecolor='w', alpha=0.5),fontsize='12')
-energy_text2=ax2.text(0.02,0.85,'',transform=ax.transAxes,bbox=dict(facecolor='w', alpha=0.5),fontsize='12')
+time_data=ax2.text(0.72,0.95,'',transform=ax.transAxes,bbox=dict(facecolor='w', alpha=0.5),fontsize='12')
+energy_data=ax2.text(0.02,0.8,'',transform=ax.transAxes,fontsize='12')
+energy_data2=ax2.text(0.02,0.8,'',transform=ax2.transAxes,color='w',fontsize='12')
 
 def init():
     line.set_data([],[])
     line2.set_data([],[])
-    time_text.set_text('')
-    energy_text.set_text('')
-    time_text2.set_text('')
-    energy_text2.set_text('')
-    return line,line2,l1_text,l2_text,m1_text,m2_text,energy_text,energy_text2,time_text2
+    time_data.set_text('')
+    energy_data.set_text('')
+    energy_data2.set_text('')
+    return line,line2,
+    energy_data,energy_data2,time_data
 
 
 def animate(i):
-    global pendulum,pendulum2,dt
-    pendulum2.step(dt,ax2)
-    pendulum.step(dt,ax)
-    line.set_data(*pendulum.position())
-    line2.set_data(*pendulum2.position())
-    plt.sca(ax)
-    time_text.set_text('Time=%.1fs' % pendulum.time_elapsed)
-    energy_text.set_text('\nKinetic energy= %.3f J' % (pendulum.energy()[1]))
-    plt.sca(ax)
-    time_text2.set_text('Time=%.1fs' % pendulum2.time_elapsed)
-    energy_text2.set_text('\nKinetic energy= %.3f J' % pendulum2.energy()[1])
-    return line,line2,time_text,energy_text,time_text2,energy_text2
+    global p1,p2,dt
+    p2.increment_time(dt,ax2)
+    p1.increment_time(dt,ax)
+    line.set_data(*p1.find_posn())
+    line2.set_data(*p2.find_posn())
 
+    time_data.set_text('Time=%.1fs' % p1.time_elapsed)
+    energy_data.set_text('\nKinetic energy= %.3f J\nPotential energy= %3f J\n\nTotal energy= %.3f J'%(p1.find_energy()[1], p1.find_energy()[0],p1.find_energy()[1]+ p1.find_energy()[0]))
+    energy_data2.set_text('\n\nKinetic energy= %.3f J\nPotential energy= %3f J\n\nTotal energy= %.3f J'%(p2.find_energy()[1], p2.find_energy()[0],p2.find_energy()[1]+ p2.find_energy()[0]))
+    return line,line2,
+    time_data,
+    energy_data,energy_data2
 
 plt.title('PENDULUM IN AIR\n',color='w',fontsize=17)
 plt.sca(ax)
 plt.title('PENDULUM IN WATER\n',color='w',fontsize='17')
-textstr = '\n\nLength of pendulum1=%.2f m \n\nLength of pendulum2=%.2f m\n\nMass of pendulum1=%.2f kg \n\nMass of pendulum2=%.2f kg\n\nAcceleration due to gravity=%.2f N/kg\n\nDensity of bob=%.2f g/cm**3\n\nDensity of water=1.00g/cm**3'%(pendulum.l1,pendulum.l2,pendulum2.m1,pendulum2.m2,pendulum2.g,pendulum.dens)
+textstr = '\n\nLength of pendulum1=%.2f m \n\nLength of pendulum2=%.2f m\n\nMass of pendulum1=%.2f kg \n\nMass of pendulum2=%.2f kg\n\nAcceleration due to gravity=%.2f N/kg\n\nDensity of bob=%.2f g/cm**3\n\nDensity of water=1.00g/cm**3'%(p1.l1,p1.l2,p2.m1,p2.m2,p2.g,p1.dens)
 plt.gcf().text(0.03, 0.5, textstr, fontsize=13,color='w')
 plt.gcf().canvas.set_window_title('Double Pendulum Simulation')
 plt.subplots_adjust(left=.25,top=.95,bottom=-.9)
